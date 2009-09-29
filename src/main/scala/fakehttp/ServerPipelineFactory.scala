@@ -9,8 +9,9 @@ import org.jboss.netty.handler.codec.http._
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory
 
 class ServerPipelineFactory(clientChannelFactory: ClientSocketChannelFactory) extends ChannelPipelineFactory {
-  val id = new AtomicInteger
-  val openBrowserHandlers = new ConcurrentSkipListSet[ServerBrowserRequestHandler]()
+  private val id = new AtomicInteger
+  private val openBrowserHandlers = new ConcurrentSkipListSet[ServerBrowserRequestHandler]()
+
   def getPipeline(): ChannelPipeline = {
     val browserRequestHandler = new ServerBrowserRequestHandler(this, id.getAndIncrement, clientChannelFactory)
     openBrowserHandlers.add(browserRequestHandler)
@@ -22,10 +23,12 @@ class ServerPipelineFactory(clientChannelFactory: ClientSocketChannelFactory) ex
     pipeline.addLast("handler", browserRequestHandler)
     return pipeline
   }
+
   def closeBrowserRequestHandlers(): Unit = {
     val i = openBrowserHandlers.iterator
     while (i.hasNext) i.next.safelyCloseChannels
   }
+
   def browserRequestHanderClosed(browserRequestHandler: ServerBrowserRequestHandler): Unit = {
     openBrowserHandlers.remove(browserRequestHandler)
   }

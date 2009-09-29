@@ -31,9 +31,11 @@ class ServerBrowserRequestHandler(
   @volatile private var browserChannel: Channel = null
   @volatile private var proxyChannel: Channel = null
 
-  override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
+  override def channelOpen(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
     browserChannel = e.getChannel
+  }
 
+  override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
     val browserRequest = e.getMessage.asInstanceOf[HttpRequest]
     browserRequest.setHeader("Connection", browserRequest.getHeader("Proxy-Connection"))
     browserRequest.removeHeader("Proxy-Connection")
