@@ -1,108 +1,185 @@
 
 import java.net.InetSocketAddress
-import java.util.concurrent.Executors
-import org.jboss.netty.bootstrap.ServerBootstrap
+import java.util.concurrent._
+import java.util.concurrent.atomic._
+import org.jboss.netty.bootstrap._
 import org.jboss.netty.buffer._
 import org.jboss.netty.channel._
-import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory
 import org.jboss.netty.handler.codec.http._
+import org.jboss.netty.channel.socket._
+import org.jboss.netty.channel.socket.nio._
+import Implicits._
 
 object Proxy {
   def main(args: Array[String]): Unit = {
-    val bootstrap = new ServerBootstrap(
-      new NioServerSocketChannelFactory(
-        Executors.newCachedThreadPool(),
-        Executors.newCachedThreadPool()))
-    bootstrap.setPipelineFactory(new HttpServerPipelineFactory());
-    bootstrap.bind(new InetSocketAddress(8080));
+    val bossThreadPool = Executors.newCachedThreadPool()
+    val workerThreadPool = Executors.newCachedThreadPool()
+    val clientChannelFactory = new NioClientSocketChannelFactory(bossThreadPool, workerThreadPool)
+    val serverBootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool))
+    serverBootstrap.setPipelineFactory(new ServerPipelineFactory(clientChannelFactory));
+    serverBootstrap.bind(new InetSocketAddress(8081));
   }
 }
 
-class HttpServerPipelineFactory extends ChannelPipelineFactory {
+object Traffic {
+  private val map = new ConcurrentHashMap[String, AtomicInteger]()
+  def record(uri: String): Unit = {
+    var i = map.putIfAbsent(uri, new AtomicInteger)
+    if (i == null) i = map.get(uri)
+    i.incrementAndGet
+  }
+  def hits = scala.collection.jcl.Set(map.entrySet)
+}
+
+class ServerPipelineFactory(clientChannelFactory: ClientSocketChannelFactory) extends ChannelPipelineFactory {
+  var id = new AtomicInteger
   def getPipeline(): ChannelPipeline = {
     val pipeline = Channels.pipeline()
-    pipeline.addLast("decoder", new HttpRequestDecoder())
+    pipeline.addLast("decoder", new HttpRequestDecoder(4096 * 4, 8192, 8192))
     pipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
     pipeline.addLast("encoder", new HttpResponseEncoder())
-    pipeline.addLast("handler", new HttpRequestHandler())
+    pipeline.addLast("handler", new BrowserRequestHandler(id.getAndIncrement, clientChannelFactory))
     return pipeline
   }
 }
 
+@ChannelPipelineCoverage("one")
+class ProxyConnectorHandler(browserRequestHandler: BrowserRequestHandler, socketAddress: InetSocketAddress, initialBrowserRequest: HttpRequest) extends SimpleChannelUpstreamHandler {
+  override def channelOpen(context: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
+    e.getChannel.connect(socketAddress).addListener((future: ChannelFuture) => browserRequestHandler.proxyConnectionComplete(future.getChannel, initialBrowserRequest))
+  }
+  override def exceptionCaught(context: ChannelHandlerContext, e: ExceptionEvent): Unit = {
+    browserRequestHandler.proxyException(e)
+  }
+  override def channelClosed(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
+    browserRequestHandler.proxyChannelClosed()
+  }
+}
 
 @ChannelPipelineCoverage("one")
-class HttpRequestHandler extends SimpleChannelUpstreamHandler {
+class ProxyResponseHandler(browserRequestHandler: BrowserRequestHandler) extends SimpleChannelUpstreamHandler {
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
-    val responseContent = new StringBuilder()
-    val request = e.getMessage.asInstanceOf[HttpRequest]
+    browserRequestHandler.proxyResponseReceived(e.getMessage.asInstanceOf[HttpResponse])
+  }
+}
 
-    responseContent.append("WELCOME TO THE WILD WILD WEB SERVER\r\n");
-    responseContent.append("===================================\r\n");
-    responseContent.append("VERSION: " + request.getProtocolVersion.getText + "\r\n");
-    if (request.containsHeader(HttpHeaders.Names.HOST)) {
-      responseContent.append("HOSTNAME: " + request.getHeader(HttpHeaders.Names.HOST) + "\r\n");
+/**
+ * Gets an HttpRequest from the browser, sets up a connection to the
+ * right server and hooks the two together.
+ */
+@ChannelPipelineCoverage("one")
+class BrowserRequestHandler(id: Int, clientChannelFactory: ClientSocketChannelFactory) extends SimpleChannelUpstreamHandler {
+  @volatile private var browserChannel: Channel = null
+  @volatile private var proxyChannel: Channel = null
+
+  override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
+    browserChannel = e.getChannel
+
+    val browserRequest = e.getMessage.asInstanceOf[HttpRequest]
+    browserRequest.setHeader("Connection", browserRequest.getHeader("Proxy-Connection"))
+    browserRequest.removeHeader("Proxy-Connection")
+    val host = browserRequest.getHeader(HttpHeaders.Names.HOST) match {
+      case "fakehttp" => "fakehttp"
+      case s => s // "localhost"
     }
-    responseContent.append("REQUEST_URI: " + request.getUri + "\r\n\r\n");
-    iterate(request.getHeaderNames) { name =>
-      iterate(request.getHeaders(name)) { value =>
-        responseContent.append("HEADER: " + name + " = " + value + "\r\n"); 
-      }
+
+    log("Got request for "+browserRequest.getUri+" (host="+host+") (method="+browserRequest.getMethod+")")
+    if (host == "fakehttp") {
+      val responseBytes = (<html><body>
+        {for (entry <- Traffic.hits) yield
+          <p>{entry.getKey} = {entry.getValue}</p>
+        }
+      </body></html>).toString.getBytes("UTF-8")
+
+      val response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+      response.setHeader("Server", "fakehttp")
+      response.setHeader("Content-Length", responseBytes.length.toString)
+      response.setContent(ChannelBuffers.wrappedBuffer(responseBytes))
+
+      sendDownstream(browserChannel, response)
+    } else if (proxyChannel != null) {
+      Traffic.record(browserRequest.getUri)
+      sendDownstream(proxyChannel, browserRequest)
+    } else {
+      Traffic.record(browserRequest.getUri)
+      createProxyChannel(host, browserRequest)
     }
-    iterate(new QueryStringDecoder(request.getUri).getParameters.entrySet) { entry =>
-      iterate(entry.getValue) { value =>
-        responseContent.append("PARAM: " + entry.getKey + " = " + value + "\r\n"); 
-      }
+  }
+  
+  def proxyConnectionComplete(proxyChannel: Channel, initialBrowserRequest: HttpRequest): Unit = {
+    if (!proxyChannel.isConnected) {
+      log("Proxy connection failed "+proxyChannel)
+      safelyCloseChannels
+    } else {
+      sendDownstream(proxyChannel, initialBrowserRequest)
+      browserChannel.setReadable(true)
     }
-    
-    val content = request.getContent;
-    if (content.readable()) {
-      responseContent.append("CONTENT: " + content.toString("UTF-8") + "\r\n");
-    }
-    writeResponse(request, responseContent, e);
+  }
+  
+  def proxyResponseReceived(response: HttpResponse): Unit = {
+    log("Proxy responded "+response)
+    sendDownstream(browserChannel, response)
   }
 
-  def writeResponse(request: HttpRequest, responseContent: StringBuilder, e: MessageEvent): Unit = {
-    val response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
-    response.setHeader(HttpHeaders.Names.CONTENT_TYPE, "text/plain; charset=UTF-8")
+  def proxyChannelClosed(): Unit = {
+    log("Proxy channel closed")
+    proxyChannel = null
+    safelyCloseChannels
+  }
 
-    val buf = ChannelBuffers.copiedBuffer(responseContent.toString(), "UTF-8")
-    response.setContent(buf)
-    response.setHeader(HttpHeaders.Names.CONTENT_LENGTH, String.valueOf(buf.readableBytes()))
-
-    val cookieString = request.getHeader(HttpHeaders.Names.COOKIE)
-    if (cookieString != null) {
-      val cookies = new CookieDecoder().decode(cookieString);
-      if (!cookies.isEmpty()) {
-        val cookieEncoder = new CookieEncoder(true);
-        val i = cookies.iterator
-        while (i.hasNext) cookieEncoder.addCookie(i.next)
-        response.addHeader(HttpHeaders.Names.SET_COOKIE, cookieEncoder.encode())
-      }
-    }
-
-    // Write the response.
-    val future = e.getChannel().write(response)
-
-    // Close the connection after the write operation is done if necessary.
-    if (shouldCloseConnection(request)) {
-      future.addListener(ChannelFutureListener.CLOSE);
-    }
+  def proxyException(e: ExceptionEvent): Unit = {
+    log("Proxy exception "+e.getCause)
+    e.getCause.printStackTrace
+    safelyCloseChannels
   }
 
   override def exceptionCaught(ctx: ChannelHandlerContext, e: ExceptionEvent): Unit = {
-    e.getCause().printStackTrace();
-    e.getChannel().close();
+    log("Browser exception "+e.getCause)
+    e.getCause.printStackTrace
+    safelyCloseChannels
   }
   
-  private def shouldCloseConnection(request: HttpRequest): Boolean = {
-    HttpHeaders.Values.CLOSE.equalsIgnoreCase(request.getHeader(HttpHeaders.Names.CONNECTION)) ||
-    (request.getProtocolVersion().equals(HttpVersion.HTTP_1_0) && !HttpHeaders.Values.KEEP_ALIVE.equalsIgnoreCase(request.getHeader(HttpHeaders.Names.CONNECTION)))
+  override def channelClosed(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
+    log("Browser channel closed")
+    browserChannel = null
+    safelyCloseChannels
   }
 
-  private def iterate[T](collection: java.util.Collection[T])(block: T => Unit): Unit = {
-    val i = collection.iterator
-    while (i.hasNext) {
-      block.apply(i.next)
-    }
+  private def createProxyChannel(host: String, initialBrowserRequest: HttpRequest): Unit = {
+    val proxyPipeline = Channels.pipeline()
+    proxyPipeline.addFirst("connector", new ProxyConnectorHandler(this, new InetSocketAddress(host, 80), initialBrowserRequest))
+    proxyPipeline.addLast("decoder", new HttpResponseDecoder())
+    proxyPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
+    proxyPipeline.addLast("encoder", new HttpRequestEncoder())
+    proxyPipeline.addLast("handler", new ProxyResponseHandler(this))
+    // No browser input until proxy is connected
+    browserChannel.setReadable(false)
+    clientChannelFactory.newChannel(proxyPipeline)
+  }
+
+  private def sendDownstream(channel: Channel, message: Object): Unit = {
+    if (channel == null) return
+    val ioDone = Channels.future(channel)
+    ioDone.addListener((future: ChannelFuture) => if (!future.isSuccess) { log("I/O error sending to "+channel) ; safelyCloseChannels })
+    channel.getPipeline.sendDownstream(new DownstreamMessageEvent(channel, ioDone, message, null))
+  }
+
+  private def log(message: String): Unit = {
+    println(id+" - "+message)
+  }
+
+  private def safelyCloseChannels(): Unit = {
+    val b = browserChannel
+    val p = proxyChannel
+    browserChannel = null
+    proxyChannel = null
+    if (b != null && b.isConnected) b.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+    if (p != null && p.isConnected) p.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+  }
+}
+
+object Implicits {
+  implicit def blockToListener(block: ChannelFuture => Unit): ChannelFutureListener = new ChannelFutureListener() {
+    override def operationComplete(future: ChannelFuture) = block(future)
   }
 }
