@@ -13,7 +13,7 @@ class ServerPipelineFactory(clientChannelFactory: ClientSocketChannelFactory) ex
   private val openBrowserHandlers = new ConcurrentSkipListSet[ServerBrowserRequestHandler]()
 
   def getPipeline(): ChannelPipeline = {
-    val browserRequestHandler = new ServerBrowserRequestHandler(this, id.getAndIncrement, clientChannelFactory)
+    val browserRequestHandler = new ServerBrowserRequestHandler(id.getAndIncrement, this, clientChannelFactory)
     openBrowserHandlers.add(browserRequestHandler)
 
     val pipeline = Channels.pipeline()

@@ -23,8 +23,8 @@ import fakehttp.Implicits._
  */
 @ChannelPipelineCoverage("one")
 class ServerBrowserRequestHandler(
-  serverPipelineFactory: ServerPipelineFactory,
   val id: Int,
+  serverPipelineFactory: ServerPipelineFactory,
   clientChannelFactory: ClientSocketChannelFactory)
   extends SimpleChannelUpstreamHandler with Comparable[ServerBrowserRequestHandler] {
 
