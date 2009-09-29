@@ -30,6 +30,7 @@ class ServerBrowserRequestHandler(
 
   @volatile private var browserChannel: Channel = null
   @volatile private var proxyChannel: Channel = null
+  @volatile private var lastHost: String = null
 
   override def channelOpen(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
     browserChannel = e.getChannel
@@ -60,7 +61,13 @@ class ServerBrowserRequestHandler(
       sendDownstream(browserChannel, response)
     } else if (proxyChannel != null) {
       Traffic.record(browserRequest.getUri)
-      sendDownstream(proxyChannel, browserRequest)
+      if (host == lastHost) {
+        sendDownstream(proxyChannel, browserRequest)
+      } else {
+        proxyChannel.close
+        proxyChannel = null
+        createProxyChannel(host, browserRequest)
+      }
     } else {
       Traffic.record(browserRequest.getUri)
       createProxyChannel(host, browserRequest)
@@ -86,7 +93,6 @@ class ServerBrowserRequestHandler(
   def proxyChannelClosed(): Unit = {
     log("Proxy channel closed")
     proxyChannel = null
-    safelyCloseChannels
   }
 
   def proxyException(e: ExceptionEvent): Unit = {
