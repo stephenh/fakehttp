@@ -1,3 +1,4 @@
+package fakehttp
 
 import java.net.InetSocketAddress
 import java.util.concurrent._
@@ -12,12 +13,29 @@ import Implicits._
 
 object Proxy {
   def main(args: Array[String]): Unit = {
+    val port = args(0).toInt
     val bossThreadPool = Executors.newCachedThreadPool()
     val workerThreadPool = Executors.newCachedThreadPool()
+
     val clientChannelFactory = new NioClientSocketChannelFactory(bossThreadPool, workerThreadPool)
+
     val serverBootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool))
-    serverBootstrap.setPipelineFactory(new ServerPipelineFactory(clientChannelFactory));
-    serverBootstrap.bind(new InetSocketAddress(8081));
+    val serverPipelineFactory = new ServerPipelineFactory(clientChannelFactory)
+    serverBootstrap.setPipelineFactory(serverPipelineFactory)
+    val serverChannel = serverBootstrap.bind(new InetSocketAddress(port));
+
+    Runtime.getRuntime.addShutdownHook(new Thread() {
+      override def run(): Unit = {
+        serverChannel.close.awaitUninterruptibly
+        serverPipelineFactory.closeBrowserRequestHandlers
+        bossThreadPool.shutdown
+        workerThreadPool.shutdown
+        bossThreadPool.awaitTermination(1, TimeUnit.MINUTES)
+        workerThreadPool.awaitTermination(1, TimeUnit.MINUTES)
+      }
+    })
+    // Use to get Eclipse to call the shutdown hook
+    // System.in.read ; System.exit(0)
   }
 }
 
@@ -32,14 +50,25 @@ object Traffic {
 }
 
 class ServerPipelineFactory(clientChannelFactory: ClientSocketChannelFactory) extends ChannelPipelineFactory {
-  var id = new AtomicInteger
+  val id = new AtomicInteger
+  val openBrowserHandlers = new ConcurrentSkipListSet[BrowserRequestHandler]()
   def getPipeline(): ChannelPipeline = {
+    val browserRequestHandler = new BrowserRequestHandler(this, id.getAndIncrement, clientChannelFactory)
+    openBrowserHandlers.add(browserRequestHandler)
+
     val pipeline = Channels.pipeline()
     pipeline.addLast("decoder", new HttpRequestDecoder(4096 * 4, 8192, 8192))
     pipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
     pipeline.addLast("encoder", new HttpResponseEncoder())
-    pipeline.addLast("handler", new BrowserRequestHandler(id.getAndIncrement, clientChannelFactory))
+    pipeline.addLast("handler", browserRequestHandler)
     return pipeline
+  }
+  def closeBrowserRequestHandlers(): Unit = {
+    val i = openBrowserHandlers.iterator
+    while (i.hasNext) i.next.safelyCloseChannels
+  }
+  def browserRequestHanderClosed(browserRequestHandler: BrowserRequestHandler): Unit = {
+    openBrowserHandlers.remove(browserRequestHandler)
   }
 }
 
@@ -68,7 +97,7 @@ class ProxyResponseHandler(browserRequestHandler: BrowserRequestHandler) extends
  * right server and hooks the two together.
  */
 @ChannelPipelineCoverage("one")
-class BrowserRequestHandler(id: Int, clientChannelFactory: ClientSocketChannelFactory) extends SimpleChannelUpstreamHandler {
+class BrowserRequestHandler(serverPipelineFactory: ServerPipelineFactory, val id: Int, clientChannelFactory: ClientSocketChannelFactory) extends SimpleChannelUpstreamHandler with Comparable[BrowserRequestHandler] {
   @volatile private var browserChannel: Channel = null
   @volatile private var proxyChannel: Channel = null
 
@@ -106,11 +135,12 @@ class BrowserRequestHandler(id: Int, clientChannelFactory: ClientSocketChannelFa
     }
   }
   
-  def proxyConnectionComplete(proxyChannel: Channel, initialBrowserRequest: HttpRequest): Unit = {
-    if (!proxyChannel.isConnected) {
-      log("Proxy connection failed "+proxyChannel)
+  def proxyConnectionComplete(newProxyChannel: Channel, initialBrowserRequest: HttpRequest): Unit = {
+    if (!newProxyChannel.isConnected) {
+      log("Proxy connection failed "+newProxyChannel)
       safelyCloseChannels
     } else {
+      proxyChannel = newProxyChannel
       sendDownstream(proxyChannel, initialBrowserRequest)
       browserChannel.setReadable(true)
     }
@@ -141,8 +171,22 @@ class BrowserRequestHandler(id: Int, clientChannelFactory: ClientSocketChannelFa
   
   override def channelClosed(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
     log("Browser channel closed")
+    serverPipelineFactory.browserRequestHanderClosed(this)
     browserChannel = null
     safelyCloseChannels
+  }
+
+  def safelyCloseChannels(): Unit = {
+    val b = browserChannel
+    val p = proxyChannel
+    browserChannel = null
+    proxyChannel = null
+    if (b != null && b.isOpen) b.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+    if (p != null && p.isOpen) p.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+  }
+  
+  override def compareTo(other: BrowserRequestHandler): Int = {
+    id - other.id
   }
 
   private def createProxyChannel(host: String, initialBrowserRequest: HttpRequest): Unit = {
@@ -168,14 +212,6 @@ class BrowserRequestHandler(id: Int, clientChannelFactory: ClientSocketChannelFa
     println(id+" - "+message)
   }
 
-  private def safelyCloseChannels(): Unit = {
-    val b = browserChannel
-    val p = proxyChannel
-    browserChannel = null
-    proxyChannel = null
-    if (b != null && b.isConnected) b.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
-    if (p != null && p.isConnected) p.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
-  }
 }
 
 object Implicits {

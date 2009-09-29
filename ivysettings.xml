@@ -1,0 +1,14 @@
+<ivysettings>
+	<settings defaultResolver="default"/>
+	<include url="${ivy.default.settings.dir}/ivysettings-public.xml"/>
+	<include url="${ivy.default.settings.dir}/ivysettings-local.xml"/>
+	<resolvers>
+		<!-- for netty -->
+		<ibiblio name="jboss" root="http://repository.jboss.org/maven2" m2compatible="true"/>
+		<chain name="default">
+			<resolver ref="local"/>
+			<resolver ref="public"/>
+			<resolver ref="jboss"/>
+		</chain>
+	</resolvers>
+</ivysettings>

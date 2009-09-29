@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<project name="fakehttp" xmlns:ivy="antlib:org.apache.ivy.ant">
+  <import file="ivybootstrap.xml"/>
+
+  <target name="retrieve" depends="ivy.bootstrap" description="downloads jars for the project">
+    <ivy:resolve/>
+    <ivy:retrieve pattern="bin/lib/[conf]/[type]s/[artifact].[ext]" conf="*" type="*"/>
+  </target>
+
+  <target name="clean" description="delete the bin directory">
+    <delete dir="bin"/>
+  </target>
+
+  <target name="compile" depends="retrieve" description="compile src/ to bin/main/">
+    <path id="build.classpath">
+      <fileset dir="bin/lib/default" includes="**/*.jar"/>
+      <fileset dir="bin/lib/buildtime" includes="**/*.jar"/>
+    </path>
+
+    <taskdef resource="scala/tools/ant/antlib.xml">
+      <classpath>
+        <path refid="build.classpath" />
+      </classpath>
+    </taskdef>
+
+    <mkdir dir="bin/main"/>
+    <scalac destdir="bin/main">
+      <src>
+        <pathelement path="src/main/scala" />
+        <pathelement path="src/main/java" />
+      </src>
+      <classpath>
+        <path refid="build.classpath" />
+      </classpath>
+    </scalac>
+
+    <javac destdir="bin/main" debug="true" nowarn="yes" source="1.6" target="1.6">
+      <src>
+        <pathelement path="src/main/java" />
+      </src>
+      <classpath>
+        <path refid="build.classpath" />
+      </classpath>
+    </javac>
+  </target>
+
+  <target name="jar" depends="compile" description="jar bin/main/ into bin/fakehttp.jar">
+    <jar destfile="bin/fakehttp.jar" manifest="src/main/resources/manifest.mf">
+      <fileset dir="bin/main" includes="**/*.class"/>
+      <zipfileset src="bin/lib/default/jars/scala-library.jar" includes="**/*" />
+      <zipfileset src="bin/lib/default/bundles/netty.jar" includes="**/*" />
+    </jar>
+  </target>
+
+</project>
