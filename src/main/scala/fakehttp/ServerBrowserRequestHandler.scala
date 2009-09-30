@@ -38,39 +38,38 @@ class ServerBrowserRequestHandler(
 
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
     val browserRequest = e.getMessage.asInstanceOf[HttpRequest]
-    browserRequest.setHeader("Connection", browserRequest.getHeader("Proxy-Connection"))
-    browserRequest.removeHeader("Proxy-Connection")
+    if (browserRequest.getHeader("Proxy-Connection") != null) {
+      browserRequest.setHeader("Connection", browserRequest.getHeader("Proxy-Connection"))
+      browserRequest.removeHeader("Proxy-Connection")
+    }
     val host = browserRequest.getHeader(HttpHeaders.Names.HOST) match {
       case "fakehttp" => "fakehttp"
-      case s => s // "localhost"
+      case s => "localhost"
     }
 
     log("Got request for "+browserRequest.getUri+" (host="+host+") (method="+browserRequest.getMethod+")")
     if (host == "fakehttp") {
-      val responseBytes = (<html><body>
-        {for (entry <- Traffic.hits) yield
-          <p>{entry.getKey} = {entry.getValue}</p>
-        }
-      </body></html>).toString.getBytes("UTF-8")
-
+      val responseXml = FakeHttpHandler.handle(browserRequest)
+      val responseBytes = responseXml.toString.getBytes("UTF-8")
       val response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
       response.setHeader("Server", "fakehttp")
       response.setHeader("Content-Length", responseBytes.length.toString)
       response.setContent(ChannelBuffers.wrappedBuffer(responseBytes))
-
       sendDownstream(browserChannel, response)
     } else if (proxyChannel != null) {
       Traffic.record(browserRequest.getUri)
       if (host == lastHost) {
         sendDownstream(proxyChannel, browserRequest)
       } else {
-        proxyChannel.close
-        proxyChannel = null
-        createProxyChannel(host, browserRequest)
+        proxyChannel.close.addListener((future: ChannelFuture) => {
+          lastHost = host
+          createProxyChannel(host, 8080, browserRequest)
+        })
       }
     } else {
       Traffic.record(browserRequest.getUri)
-      createProxyChannel(host, browserRequest)
+      lastHost = host
+      createProxyChannel(host, 8080, browserRequest)
     }
   }
   
@@ -127,9 +126,9 @@ class ServerBrowserRequestHandler(
     id - other.id
   }
 
-  private def createProxyChannel(host: String, initialBrowserRequest: HttpRequest): Unit = {
+  private def createProxyChannel(host: String, port: Int, initialBrowserRequest: HttpRequest): Unit = {
     val proxyPipeline = Channels.pipeline()
-    proxyPipeline.addFirst("connector", new ProxyConnectorHandler(this, new InetSocketAddress(host, 80), initialBrowserRequest))
+    proxyPipeline.addFirst("connector", new ProxyConnectorHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
     proxyPipeline.addLast("decoder", new HttpResponseDecoder())
     proxyPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
     proxyPipeline.addLast("encoder", new HttpRequestEncoder())
@@ -147,6 +146,6 @@ class ServerBrowserRequestHandler(
   }
 
   private def log(message: String): Unit = {
-    println(id+" - "+message)
+    System.err.println(id+" - "+message)
   }
 }

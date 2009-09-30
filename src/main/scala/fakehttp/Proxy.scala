@@ -20,6 +20,8 @@ object Proxy {
     serverBootstrap.setPipelineFactory(serverPipelineFactory)
     val serverChannel = serverBootstrap.bind(new InetSocketAddress(port));
 
+    System.err.println("Proxy started on "+port)
+
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run(): Unit = {
         serverChannel.close.awaitUninterruptibly
@@ -28,6 +30,7 @@ object Proxy {
         workerThreadPool.shutdown
         bossThreadPool.awaitTermination(1, TimeUnit.MINUTES)
         workerThreadPool.awaitTermination(1, TimeUnit.MINUTES)
+        System.err.println("Proxy shutdown")
       }
     })
     // Use to get Eclipse to call the shutdown hook
