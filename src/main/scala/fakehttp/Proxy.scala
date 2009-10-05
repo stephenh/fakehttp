@@ -34,6 +34,6 @@ object Proxy {
       }
     })
     // Use to get Eclipse to call the shutdown hook
-    // System.in.read ; System.exit(0)
+    System.in.read ; System.exit(0)
   }
 }

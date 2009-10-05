@@ -31,6 +31,7 @@ class ServerBrowserRequestHandler(
   @volatile private var browserChannel: Channel = null
   @volatile private var proxyChannel: Channel = null
   @volatile private var lastHost: String = null
+  @volatile private var isSsl: Boolean = false
 
   override def channelOpen(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
     browserChannel = e.getChannel
@@ -44,32 +45,53 @@ class ServerBrowserRequestHandler(
     }
     val host = browserRequest.getHeader(HttpHeaders.Names.HOST) match {
       case "fakehttp" => "fakehttp"
-      case s => "localhost"
+      case s => s // "localhost"
+    }
+    val port = browserRequest.getHeader(HttpHeaders.Names.HOST) match {
+      case "fakehttp" => 443
+      case p => 80
     }
 
     log("Got request for "+browserRequest.getUri+" (host="+host+") (method="+browserRequest.getMethod+")")
     if (host == "fakehttp") {
-      val responseXml = FakeHttpHandler.handle(browserRequest)
-      val responseBytes = responseXml.toString.getBytes("UTF-8")
-      val response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
-      response.setHeader("Server", "fakehttp")
-      response.setHeader("Content-Length", responseBytes.length.toString)
-      response.setContent(ChannelBuffers.wrappedBuffer(responseBytes))
-      sendDownstream(browserChannel, response)
+      if (browserRequest.getMethod == HttpMethod.CONNECT) {
+        // Our incoming browser channel is an SSL server
+        import org.jboss.netty.handler.ssl.SslHandler
+        val serverEngine = FakeSsl.serverContext.createSSLEngine
+        serverEngine.setUseClientMode(false)
+        
+        val CRLF = "\r\n"
+        val resp = "HTTP/1.0 200 Connection established"+CRLF+CRLF
+        println("Sending back "+resp)
+        val buffer = ChannelBuffers.wrappedBuffer(resp.getBytes())
+        sendDownstream(browserChannel, buffer, (future: ChannelFuture) => {
+          browserChannel.getPipeline.addFirst("ssl", new SslHandler(serverEngine))
+        })
+      } else {
+          val responseXml = FakeHttpHandler.handle(browserRequest)
+          val responseBytes = responseXml.toString.getBytes("UTF-8")
+          val response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+          response.setHeader("Server", "fakehttp")
+          response.setHeader("Content-Length", responseBytes.length.toString)
+          response.setContent(ChannelBuffers.wrappedBuffer(responseBytes))
+          sendDownstream(browserChannel, response)
+      }
     } else if (proxyChannel != null) {
       Traffic.record(browserRequest.getUri)
       if (host == lastHost) {
         sendDownstream(proxyChannel, browserRequest)
-      } else {
+
+        log("Proxy host changed to "+host)
         proxyChannel.close.addListener((future: ChannelFuture) => {
           lastHost = host
-          createProxyChannel(host, 8080, browserRequest)
+          createProxyChannel(host, port, browserRequest)
         })
       }
     } else {
       Traffic.record(browserRequest.getUri)
       lastHost = host
-      createProxyChannel(host, 8080, browserRequest)
+      log("Proxy host changed to "+host)
+      createProxyChannel(host, port, browserRequest)
     }
   }
   
@@ -79,7 +101,15 @@ class ServerBrowserRequestHandler(
       safelyCloseChannels
     } else {
       proxyChannel = newProxyChannel
-      sendDownstream(proxyChannel, initialBrowserRequest)
+      if (initialBrowserRequest.getMethod == HttpMethod.CONNECT) {
+        val CRLF = "\r\n"
+        val resp = "HTTP/1.0 200 Connection established"+CRLF+CRLF+CRLF
+        println("Sending back "+resp)
+        val buffer = ChannelBuffers.wrappedBuffer(resp.getBytes())
+        sendDownstream(browserChannel, buffer)
+      } else {
+        sendDownstream(proxyChannel, initialBrowserRequest)
+      }
       browserChannel.setReadable(true)
     }
   }
@@ -128,6 +158,21 @@ class ServerBrowserRequestHandler(
 
   private def createProxyChannel(host: String, port: Int, initialBrowserRequest: HttpRequest): Unit = {
     val proxyPipeline = Channels.pipeline()
+
+    if (port == 443) {
+    // Our incoming browser channel is an SSL server
+    import org.jboss.netty.handler.ssl.SslHandler
+    val serverEngine = FakeSsl.serverContext.createSSLEngine
+    serverEngine.setUseClientMode(false)
+    browserChannel.getPipeline.addFirst("ssl", new SslHandler(serverEngine))
+
+    // Our outgoing proxy is an SSL client
+    val clientEngine = FakeSsl.clientContext.createSSLEngine
+    clientEngine.setUseClientMode(true)
+    proxyPipeline.addLast("ssl", new SslHandler(clientEngine))
+    isSsl = true
+    }
+
     proxyPipeline.addFirst("connector", new ProxyConnectorHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
     proxyPipeline.addLast("decoder", new HttpResponseDecoder())
     proxyPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
@@ -141,7 +186,22 @@ class ServerBrowserRequestHandler(
   private def sendDownstream(channel: Channel, message: Object): Unit = {
     if (channel == null) return
     val ioDone = Channels.future(channel)
-    ioDone.addListener((future: ChannelFuture) => if (!future.isSuccess) { log("I/O error sending to "+channel) ; safelyCloseChannels })
+    ioDone.addListener((future: ChannelFuture) => if (!future.isSuccess) { log("I/O error sending to "+channel) ; safelyCloseChannels } else { println("Successfully sent"+message) })
+    channel.getPipeline.sendDownstream(new DownstreamMessageEvent(channel, ioDone, message, null))
+  }
+
+  private def sendDownstream(channel: Channel, message: Object, onSuccess: ChannelFuture => Unit): Unit = {
+    if (channel == null) return
+    val ioDone = Channels.future(channel)
+    ioDone.addListener((future: ChannelFuture) => {
+      if (!future.isSuccess) {
+        log("I/O error sending to "+channel)
+        safelyCloseChannels
+      } else {
+        println("Successfully sent"+message)
+        onSuccess(future)
+      }
+    })
     channel.getPipeline.sendDownstream(new DownstreamMessageEvent(channel, ioDone, message, null))
   }
 
