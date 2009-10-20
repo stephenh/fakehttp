@@ -26,11 +26,11 @@ import fakehttp.handler._
  */
 @ChannelPipelineCoverage("one")
 class IncomingRequestHandler(
-  val id: Int,
+  id: Int,
   requestHandler: HttpHandler,
   incomingPipelineFactory: IncomingPipelineFactory,
   outgoingChannelFactory: ClientSocketChannelFactory
-  ) extends SimpleChannelUpstreamHandler with Comparable[IncomingRequestHandler] {
+  ) extends SimpleChannelUpstreamHandler {
 
   @volatile private var incomingChannel: Channel = null
   @volatile private var outgoingChannel: Channel = null
@@ -107,10 +107,6 @@ class IncomingRequestHandler(
     if (out != null && out.isOpen) out.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
   }
 
-  override def compareTo(other: IncomingRequestHandler): Int = {
-    id - other.id
-  }
-
   private def sendProxy(host: String, port: Int, req: HttpRequest): Unit = {
     val out = outgoingChannel
     if (out == null) {
@@ -181,7 +177,7 @@ class IncomingRequestHandler(
   private def log(message: String): Unit = {
     System.err.println(id+" - "+message)
   }
-  
+
   /** After receiving a CONNECT request, responds with HTTP 200 and then installs an SSLHandler for the host. */
   private def setupIncomingForSsl(host: String): Unit = {
     val serverEngine = FakeSsl.createServerContextForHost(host).createSSLEngine

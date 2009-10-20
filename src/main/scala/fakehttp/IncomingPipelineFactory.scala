@@ -1,6 +1,6 @@
 package fakehttp
 
-import java.util.concurrent.ConcurrentSkipListSet
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import org.jboss.netty.channel.Channels
 import org.jboss.netty.channel.ChannelPipeline
@@ -11,13 +11,13 @@ import fakehttp.handler.HttpHandler
 
 class IncomingPipelineFactory(httpHandler: HttpHandler, clientChannelFactory: ClientSocketChannelFactory) extends ChannelPipelineFactory {
   private val id = new AtomicInteger
-  private val openHandlers = new ConcurrentSkipListSet[IncomingRequestHandler]()
+  private val openHandlers = new ConcurrentHashMap[IncomingRequestHandler, Int]()
 
   def getPipeline(): ChannelPipeline = {
     val incomingRequestHandler = new IncomingRequestHandler(id.getAndIncrement, httpHandler, this, clientChannelFactory)
 
     // Remember this so we can close it on shut down
-    openHandlers.add(incomingRequestHandler)
+    openHandlers.put(incomingRequestHandler, 0)
 
     val pipeline = Channels.pipeline()
     pipeline.addLast("decoder", new HttpRequestDecoder(4096 * 4, 8192, 8192))
@@ -28,7 +28,7 @@ class IncomingPipelineFactory(httpHandler: HttpHandler, clientChannelFactory: Cl
   }
 
   def closeRequestHandlers(): Unit = {
-    val i = openHandlers.iterator
+    val i = openHandlers.keySet.iterator
     while (i.hasNext) i.next.safelyCloseChannels
   }
 
