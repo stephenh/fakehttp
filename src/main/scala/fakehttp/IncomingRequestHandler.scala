@@ -124,7 +124,6 @@ class IncomingRequestHandler(
   }
 
   private def createOutgoingChannel(host: String, port: Int, initialBrowserRequest: HttpRequest): Unit = {
-    val proxyPipeline = Channels.pipeline()
     val in = incomingChannel
     if (in == null) return
 
@@ -137,23 +136,23 @@ class IncomingRequestHandler(
     // No browser input until proxy is connected
     in.setReadable(false)
 
-    // Need better check than port
+    val outgoingPipeline = Channels.pipeline()
     if (initialBrowserRequest.getMethod() == HttpMethod.CONNECT) {
       // Our outgoing prSxy is an SSL client--we'll setup our SSL server on in proxyConnectionComplete
       val clientEngine = FakeSsl.clientContext.createSSLEngine
       clientEngine.setUseClientMode(true)
-      proxyPipeline.addLast("ssl", new SslHandler(clientEngine))
+      outgoingPipeline.addLast("ssl", new SslHandler(clientEngine))
     }
 
     lastHost = host
 
-    proxyPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
+    outgoingPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
     // put these back if you want to translate the response somehow
-    // proxyPipeline.addLast("decoder", new HttpResponseDecoder())
-    // proxyPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
-    proxyPipeline.addLast("encoder", new HttpRequestEncoder())
-    proxyPipeline.addLast("outgoingResponse", new OutgoingResponseHandler(this))
-    outgoingChannelFactory.newChannel(proxyPipeline)
+    // outgoingPipeline.addLast("decoder", new HttpResponseDecoder())
+    // outgoingPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
+    outgoingPipeline.addLast("encoder", new HttpRequestEncoder())
+    outgoingPipeline.addLast("outgoingResponse", new OutgoingResponseHandler(this))
+    outgoingChannelFactory.newChannel(outgoingPipeline)
   }
 
   private def sendDownstream(channel: Channel, message: Object): Unit = {
