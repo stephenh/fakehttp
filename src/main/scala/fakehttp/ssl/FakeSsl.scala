@@ -31,6 +31,7 @@ object FakeTrustManager extends TrustManagerFactorySpi {
 object FakeSsl {
   private val ks = KeyStore.getInstance("JKS")
   ks.load(classOf[Proxy].getResourceAsStream("/cybervillainsCA.jks"), "password".toCharArray)
+
   private val signingCert = ks.getCertificate("signingCert").asInstanceOf[X509Certificate]
   private val signingPrivateKey = ks.getKey("signingCertPrivKey", "password".toCharArray).asInstanceOf[PrivateKey]
   private val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)

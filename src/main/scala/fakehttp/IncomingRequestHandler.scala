@@ -69,8 +69,8 @@ class IncomingRequestHandler(
     in.setReadable(true)
   }
   
-  def outgoingResponseReceived(response: HttpResponse): Unit = {
-    log("Outgoing responded "+response)
+  def outgoingResponseReceived(response: Object): Unit = {
+    // log("Outgoing responded "+response)
     sendDownstream(incomingChannel, response)
   }
 
@@ -152,8 +152,9 @@ class IncomingRequestHandler(
     lastHost = host
 
     proxyPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
-    proxyPipeline.addLast("decoder", new HttpResponseDecoder())
-    proxyPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
+    // put these back if you want to translate the response somehow
+    // proxyPipeline.addLast("decoder", new HttpResponseDecoder())
+    // proxyPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
     proxyPipeline.addLast("encoder", new HttpRequestEncoder())
     proxyPipeline.addLast("outgoingResponse", new OutgoingResponseHandler(this))
     outgoingChannelFactory.newChannel(proxyPipeline)
