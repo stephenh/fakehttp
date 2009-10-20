@@ -6,23 +6,23 @@ import org.jboss.netty.handler.codec.http._
 import fakehttp.Implicits._
 
 @ChannelPipelineCoverage("one")
-class ProxyConnectorHandler(
-  browserRequestHandler: ServerBrowserRequestHandler,
+class OutgoingConnectHandler(
+  incomingRequestHandler: IncomingRequestHandler,
   socketAddress: InetSocketAddress,
   initialBrowserRequest: HttpRequest)
   extends SimpleChannelUpstreamHandler {
 
   override def channelOpen(context: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
     e.getChannel.connect(socketAddress).addListener((future: ChannelFuture) => {
-      browserRequestHandler.proxyConnectionComplete(future.getChannel, initialBrowserRequest)
+      incomingRequestHandler.outgoingConnectionComplete(future.getChannel, initialBrowserRequest)
     })
   }
 
   override def exceptionCaught(context: ChannelHandlerContext, e: ExceptionEvent): Unit = {
-    browserRequestHandler.proxyException(e)
+    incomingRequestHandler.outgoingException(e)
   }
 
   override def channelClosed(cxt: ChannelHandlerContext, e: ChannelStateEvent): Unit = {
-    browserRequestHandler.proxyChannelClosed()
+    incomingRequestHandler.outgoingChannelClosed()
   }
 }

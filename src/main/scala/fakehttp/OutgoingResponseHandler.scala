@@ -4,8 +4,8 @@ import org.jboss.netty.channel._
 import org.jboss.netty.handler.codec.http._
 
 @ChannelPipelineCoverage("one")
-class ProxyResponseHandler(browserRequestHandler: ServerBrowserRequestHandler) extends SimpleChannelUpstreamHandler {
+class OutgoingResponseHandler(incomingRequestHandler: IncomingRequestHandler) extends SimpleChannelUpstreamHandler {
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
-    browserRequestHandler.proxyResponseReceived(e.getMessage.asInstanceOf[HttpResponse])
+    incomingRequestHandler.outgoingResponseReceived(e.getMessage.asInstanceOf[HttpResponse])
   }
 }
