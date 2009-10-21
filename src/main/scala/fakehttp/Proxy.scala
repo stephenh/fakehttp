@@ -3,9 +3,6 @@ package fakehttp
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import org.jboss.netty.bootstrap.ServerBootstrap
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
-import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory
 import fakehttp.handler._
 
 object Proxy {
@@ -37,6 +34,6 @@ object Proxy {
     })
 
     // Use to get Eclipse to call the shutdown hook
-    // System.in.read ; System.exit(0)
+    System.in.read ; System.exit(0)
   }
 }

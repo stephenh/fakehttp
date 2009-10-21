@@ -27,7 +27,7 @@ import fakehttp.handler._
 @ChannelPipelineCoverage("one")
 class IncomingRequestHandler(
   id: Int,
-  requestHandler: HttpHandler,
+  requestInterceptor: HttpHandler,
   incomingPipelineFactory: IncomingPipelineFactory,
   outgoingChannelFactory: ClientSocketChannelFactory
   ) extends SimpleChannelUpstreamHandler {
@@ -43,7 +43,7 @@ class IncomingRequestHandler(
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
     val req = e.getMessage.asInstanceOf[HttpRequest]
     log("Got "+req.getMethod+" request for "+req.getUri)
-    requestHandler.handle(req) match {
+    requestInterceptor.handle(req) match {
       case ProxyResult(host, port) => sendProxy(host, port, req)
       case StaticResult(response) => sendDownstream(incomingChannel, response)
     }
