@@ -127,12 +127,6 @@ class IncomingRequestHandler(
     val in = incomingChannel
     if (in == null) return
 
-    // I'm not really sure whether this will ever happen or not...
-    if (in.getPipeline.get("ssl") != null) {
-      log("Removing old ssl from browser channel...")
-      in.getPipeline.remove("ssl")
-    }
-
     // No browser input until proxy is connected
     in.setReadable(false)
 
