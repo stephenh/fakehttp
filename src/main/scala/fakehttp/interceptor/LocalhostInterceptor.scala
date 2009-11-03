@@ -1,16 +1,16 @@
-package fakehttp.handler
+package fakehttp.interceptor
 
 import org.jboss.netty.buffer._
 import org.jboss.netty.handler.codec.http._
 
-class FakeHttpHandler extends HttpHandler {
-  def handle(req: HttpRequest): HandleResult = {
+class LocalhostInterceptor extends Interceptor {
+  def intercept(req: HttpRequest): InterceptResult = {
     val host = req.getHeader(HttpHeaders.Names.HOST) match {
       case "fakehttp" => "fakehttp"
       case other => "localhost"
     }
     val port = req.getHeader(HttpHeaders.Names.HOST) match {
-      case "fakehttp" => 443
+      case "fakehttp" => 80
       case p => 80
     }
 

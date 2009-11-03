@@ -1,9 +1,9 @@
-package fakehttp.handler
+package fakehttp.interceptor
 
 import org.jboss.netty.handler.codec.http._
 
-class NoopHandler extends HttpHandler {
-  def handle(req: HttpRequest): HandleResult = {
+class NoopInterceptor extends Interceptor {
+  def intercept(req: HttpRequest): InterceptResult = {
     // Watch for foo.com:123
     val parts = req.getHeader(HttpHeaders.Names.HOST).split(":")
     val host = parts(0)

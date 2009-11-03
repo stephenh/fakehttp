@@ -1,4 +1,4 @@
-package fakehttp.handler
+package fakehttp.interceptor
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._

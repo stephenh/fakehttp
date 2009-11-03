@@ -8,7 +8,7 @@ import org.jboss.netty.handler.codec.http._
 import org.jboss.netty.handler.ssl.SslHandler
 import fakehttp.Implicits._
 import fakehttp.ssl.FakeSsl
-import fakehttp.handler._
+import fakehttp.interceptor._
 
 /**
  * Gets an HttpRequest from the browser, sets up a connection to the
@@ -17,7 +17,7 @@ import fakehttp.handler._
 @ChannelPipelineCoverage("one")
 class IncomingRequestHandler(
   id: Int,
-  requestInterceptor: HttpHandler,
+  interceptor: Interceptor,
   incomingPipelineFactory: IncomingPipelineFactory,
   outgoingChannelFactory: ClientSocketChannelFactory
   ) extends SimpleChannelUpstreamHandler {
@@ -41,7 +41,7 @@ class IncomingRequestHandler(
 
     val req = e.getMessage.asInstanceOf[HttpRequest]
     log("Got "+req.getMethod+" request for "+req.getUri)
-    requestInterceptor.handle(req) match {
+    interceptor.intercept(req) match {
       case ProxyResult(host, port) => sendProxy(host, port, req)
       case StaticResult(response) => sendDownstream(incomingChannel, response)
     }
