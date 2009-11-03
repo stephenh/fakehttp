@@ -76,7 +76,7 @@ object CyberVillainsCerts {
     gen.setNotAfter(new Date(System.currentTimeMillis() + 30L * 60 * 60 * 24 * 30 * 12))
     gen.setNotBefore(new Date(System.currentTimeMillis() - 1000L * 60 * 60 * 24 * 30 * 12))
     gen.setIssuerDN(caCert.getSubjectX500Principal())
-    gen.setSerialNumber(new java.math.BigInteger(java.lang.Long.toString(System .currentTimeMillis())))
+    gen.setSerialNumber(new java.math.BigInteger(java.lang.Long.toString(System.currentTimeMillis())))
     gen.addExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false))
     gen.addExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifierStructure(newPublicKey))
     gen.addExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifierStructure(caCert.getPublicKey()))

@@ -11,7 +11,7 @@
   </publications>
   <dependencies>
     <dependency org="org.jboss.netty" name="netty" rev="3.1.3.GA" conf="default->default;sources->sources"/>
-    <dependency org="bouncycastle" name="bcprov-jdk16" rev="140" conf="default->default;sources->sources"/>
+    <dependency org="org.bouncycastle" name="bcprov-jdk16" rev="1.44" conf="default->default;sources->sources"/>
     <dependency org="org.scala-lang" name="scala-library" rev="2.7.5" conf="default->default;sources->sources"/>
     <dependency org="org.scala-lang" name="scala-compiler" rev="2.7.5" conf="buildtime->default"/>
   </dependencies>
