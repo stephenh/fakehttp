@@ -7,10 +7,12 @@ import org.jboss.netty.channel.ChannelPipeline
 import org.jboss.netty.channel.ChannelPipelineFactory
 import org.jboss.netty.handler.codec.http._
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory
+import fakehttp.ssl.SslMode
 import fakehttp.interceptor.Interceptor
 
 class IncomingPipelineFactory(
   interceptor: Interceptor,
+  sslMode: SslMode,
   outgoingChannelFactory: ClientSocketChannelFactory)
   extends ChannelPipelineFactory {
 
@@ -18,7 +20,7 @@ class IncomingPipelineFactory(
   private val openHandlers = new ConcurrentHashMap[IncomingRequestHandler, Int]()
 
   def getPipeline(): ChannelPipeline = {
-    val incomingRequestHandler = new IncomingRequestHandler(id.getAndIncrement, interceptor, this, outgoingChannelFactory)
+    val incomingRequestHandler = new IncomingRequestHandler(id.getAndIncrement, interceptor, sslMode, this, outgoingChannelFactory)
 
     // Remember this so we can close it on shut down
     openHandlers.put(incomingRequestHandler, 0)

@@ -7,17 +7,19 @@ import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory
 import org.jboss.netty.bootstrap.ServerBootstrap
 import fakehttp.interceptor._
+import fakehttp.ssl._
 
 object Proxy {
   def main(args: Array[String]): Unit = {
     val port = args(0).toInt
     val pool = Executors.newCachedThreadPool()
     val interceptor = new NoopInterceptor()
+    val sslMode = new ClearSslMode() // OpaqueSslMode()
 
     // Our incoming channel will need to create outgoing traffic, so pass
     // the outgoing factory along
     val outgoingChannelFactory = new NioClientSocketChannelFactory(pool, pool)
-    val incomingPipelineFactory = new IncomingPipelineFactory(interceptor, outgoingChannelFactory)
+    val incomingPipelineFactory = new IncomingPipelineFactory(interceptor, sslMode, outgoingChannelFactory)
 
     // Bootstrap and start the proxy listening for incoming connections
     val incomingBootstrap = new ServerBootstrap(new NioServerSocketChannelFactory(pool, pool))

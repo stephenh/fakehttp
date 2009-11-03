@@ -7,8 +7,8 @@ import org.jboss.netty.channel.socket.ClientSocketChannelFactory
 import org.jboss.netty.handler.codec.http._
 import org.jboss.netty.handler.ssl.SslHandler
 import fakehttp.Implicits._
-import fakehttp.ssl.FakeSsl
 import fakehttp.interceptor._
+import fakehttp.ssl._
 
 /**
  * Gets an HttpRequest from the browser, sets up a connection to the
@@ -18,6 +18,7 @@ import fakehttp.interceptor._
 class IncomingRequestHandler(
   id: Int,
   interceptor: Interceptor,
+  sslMode: SslMode,
   incomingPipelineFactory: IncomingPipelineFactory,
   outgoingChannelFactory: ClientSocketChannelFactory
   ) extends SimpleChannelUpstreamHandler {
@@ -32,7 +33,7 @@ class IncomingRequestHandler(
 
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
     // If we're getting raw ChannelBuffers, our HttpMessageDecoder has been removed
-    // for opaque SSL mode, so just forward on the raw bytes
+    // for OpaqueSslMode, so just forward on the raw bytes
     if (e.getMessage.isInstanceOf[ChannelBuffer]) {
       log("Got "+e.getMessage+" for "+lastHost)
       sendDownstream(outgoingChannel, e.getMessage)
@@ -60,10 +61,11 @@ class IncomingRequestHandler(
     if (in == null) { safelyCloseChannels ; return }
 
     if (initialBrowserRequest.getMethod == HttpMethod.CONNECT) {
-      setupIncomingForSsl(lastHost)
+      sslMode.setupIncomingForSsl(this, incomingChannel, lastHost)
     } else {
       sendDownstream(newOutgoingChannel, initialBrowserRequest)
     }
+
     in.setReadable(true)
   }
   
@@ -127,16 +129,12 @@ class IncomingRequestHandler(
 
     // No browser input until proxy is connected
     in.setReadable(false)
+    lastHost = host
 
     val outgoingPipeline = Channels.pipeline()
     if (initialBrowserRequest.getMethod() == HttpMethod.CONNECT) {
-      // Our outgoing prSxy is an SSL client--we'll setup our SSL server on in proxyConnectionComplete
-      val clientEngine = FakeSsl.clientContext.createSSLEngine
-      clientEngine.setUseClientMode(true)
-      // outgoingPipeline.addLast("ssl", new SslHandler(clientEngine))
+      sslMode.setupOutgoingForSsl(this, outgoingPipeline)
     }
-
-    lastHost = host
 
     outgoingPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
     // put these back if you want to translate the response somehow
@@ -151,7 +149,7 @@ class IncomingRequestHandler(
     sendDownstream(channel, message, null)
   }
 
-  private def sendDownstream(channel: Channel, message: Object, onSuccess: ChannelFuture => Unit): Unit = {
+  def sendDownstream(channel: Channel, message: Object, onSuccess: ChannelFuture => Unit): Unit = {
     if (channel == null) return
     val ioDone = Channels.future(channel)
     ioDone.addListener((future: ChannelFuture) => {
@@ -167,16 +165,5 @@ class IncomingRequestHandler(
 
   private def log(message: String): Unit = {
     System.err.println(id+" - "+message)
-  }
-
-  /** After receiving a CONNECT request, responds with HTTP 200 and then installs an SSLHandler for the host. */
-  private def setupIncomingForSsl(host: String): Unit = {
-    // val serverEngine = FakeSsl.createServerContextForHost(host).createSSLEngine
-    val buffer = ChannelBuffers.wrappedBuffer("HTTP/1.1 200 Connection established\r\n\r\n".getBytes())
-    sendDownstream(incomingChannel, buffer, (future: ChannelFuture) => {
-      incomingChannel.getPipeline.remove("decoder")
-      incomingChannel.getPipeline.remove("aggregator")
-      // incomingChannel.getPipeline.addFirst("ssl", new SslHandler(serverEngine))
-    })
   }
 }
