@@ -27,7 +27,6 @@ class IncomingPipelineFactory(
 
     val pipeline = Channels.pipeline()
     pipeline.addLast("decoder", new HttpRequestDecoder(4096 * 4, 8192, 8192))
-    pipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
     pipeline.addLast("encoder", new HttpResponseEncoder())
     pipeline.addLast("handler", incomingRequestHandler)
     return pipeline

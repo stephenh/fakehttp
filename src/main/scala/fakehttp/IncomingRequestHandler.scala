@@ -32,9 +32,7 @@ class IncomingRequestHandler(
   }
 
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
-    // If we're getting raw ChannelBuffers, our HttpMessageDecoder has been removed
-    // for OpaqueSslMode, so just forward on the raw bytes
-    if (e.getMessage.isInstanceOf[ChannelBuffer]) {
+    if (forwardRawMessage(e.getMessage)) {
       log("Got "+e.getMessage+" for "+lastHost)
       sendDownstream(outgoingChannel, e.getMessage)
       return
@@ -137,9 +135,8 @@ class IncomingRequestHandler(
     }
 
     outgoingPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
-    // put these back if you want to translate the response somehow
+    // Put this back if you want to translate the response somehow
     // outgoingPipeline.addLast("decoder", new HttpResponseDecoder())
-    // outgoingPipeline.addLast("aggregator", new HttpChunkAggregator(1048576))
     outgoingPipeline.addLast("encoder", new HttpRequestEncoder())
     outgoingPipeline.addLast("outgoingResponse", new OutgoingResponseHandler(this))
     outgoingChannelFactory.newChannel(outgoingPipeline)
@@ -161,6 +158,13 @@ class IncomingRequestHandler(
       }
     })
     channel.getPipeline.sendDownstream(new DownstreamMessageEvent(channel, ioDone, message, null))
+  }
+
+  /** @return whether we should skip introspecting the message and just forward it */
+  private def forwardRawMessage(message: Object): Boolean = {
+    // If ChannelBuffer, our HttpMessageDecoder was removed by OpaqueSslMode
+    // If HttpChunk, forward on the existing connection
+    return message.isInstanceOf[ChannelBuffer] || message.isInstanceOf[HttpChunk]
   }
 
   private def log(message: String): Unit = {

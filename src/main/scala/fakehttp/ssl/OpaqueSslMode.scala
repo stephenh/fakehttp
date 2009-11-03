@@ -17,7 +17,6 @@ class OpaqueSslMode extends SslMode {
     val buffer = ChannelBuffers.wrappedBuffer("HTTP/1.1 200 Connection established\r\n\r\n".getBytes())
     handler.sendDownstream(incomingChannel, buffer, (future: ChannelFuture) => {
       incomingChannel.getPipeline.remove("decoder")
-      incomingChannel.getPipeline.remove("aggregator")
     })
   }
 }
