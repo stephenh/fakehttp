@@ -23,6 +23,13 @@ import org.bouncycastle.x509.X509V3CertificateGenerator
 import org.bouncycastle.x509.extension.AuthorityKeyIdentifierStructure
 import org.bouncycastle.x509.extension.SubjectKeyIdentifierStructure
 
+/**
+ * Makes client and server SSLContexts on the fly using the Cybervillians cert as a root.
+ *
+ * If the client browser has the Cybervillians cert installed as a root, this means
+ * we can transparently decode the proxied information and recode it without the client
+ * knowing. Primarily useful for testing apps that use SSL.
+ */
 object CyberVillainsContextFactory {
   private val ks = KeyStore.getInstance("JKS")
   ks.load(classOf[Proxy].getResourceAsStream("/cybervillainsCA.jks"), "password".toCharArray)
@@ -33,10 +40,13 @@ object CyberVillainsContextFactory {
   kmf.init(ks, "password".toCharArray)
 
   private val serverContexts = new scala.collection.mutable.HashMap[String, SSLContext]()
-
   val clientContext = SSLContext.getInstance("TLS")
   clientContext.init(null, null, null)
 
+  /** @return a context for connecting to our outgoing proxy as a client. */
+  def createClientContext(): SSLContext = clientContext
+
+  /** @return a context for serving our incoming browser as a server. */
   def createServerContextForHost(hostname: String): SSLContext = synchronized {
     serverContexts.getOrElse(hostname, makeServerContextForHost(hostname))
   }
@@ -65,6 +75,13 @@ object CyberVillainsContextFactory {
   }
 }
 
+/**
+ * Creates fake certificates for host.
+ *
+ * Based on the selenium code at:
+ *
+ * http://code.google.com/p/selenium/source/browse/selenium-rc/trunk/server-coreless/src/main/java/cybervillains/ca/CertificateCreator.java
+ */
 object CyberVillainsCerts {
   java.security.Security.insertProviderAt(new org.bouncycastle.jce.provider.BouncyCastleProvider(), 2)
 
@@ -97,7 +114,7 @@ object CyberVillainsCerts {
   }
 }
 
-// Not used right now--I think for accepting bad destination certs.
+// Not used right now--for accepting bad destination certs.
 object FakeTrustManager extends TrustManagerFactorySpi {
   val dummyTrustManager = new X509TrustManager() {
     override def getAcceptedIssuers() = Array[X509Certificate]()

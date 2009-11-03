@@ -135,7 +135,7 @@ class IncomingRequestHandler(
     }
 
     outgoingPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
-    // Put this back if you want to translate the response somehow
+    // Put this back if you want to translate the response
     // outgoingPipeline.addLast("decoder", new HttpResponseDecoder())
     outgoingPipeline.addLast("encoder", new HttpRequestEncoder())
     outgoingPipeline.addLast("outgoingResponse", new OutgoingResponseHandler(this))
@@ -163,7 +163,7 @@ class IncomingRequestHandler(
   /** @return whether we should skip introspecting the message and just forward it */
   private def forwardRawMessage(message: Object): Boolean = {
     // If ChannelBuffer, our HttpMessageDecoder was removed by OpaqueSslMode
-    // If HttpChunk, forward on the existing connection
+    // If HttpChunk, forward onto the existing connection
     return message.isInstanceOf[ChannelBuffer] || message.isInstanceOf[HttpChunk]
   }
 
