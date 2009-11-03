@@ -1,6 +1,7 @@
 package fakehttp
 
 import java.net.InetSocketAddress
+import org.jboss.netty.buffer.ChannelBuffer
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.channel.Channel
 import org.jboss.netty.channel.Channels
@@ -41,6 +42,14 @@ class IncomingRequestHandler(
   }
 
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
+    // If we're getting raw ChannelBuffers, our HttpMessageDecoder has been removed
+    // for opaque SSL mode, so just forward on the raw bytes
+    if (e.getMessage.isInstanceOf[ChannelBuffer]) {
+      log("Got "+e.getMessage+" for "+lastHost)
+      sendDownstream(outgoingChannel, e.getMessage)
+      return
+    }
+
     val req = e.getMessage.asInstanceOf[HttpRequest]
     log("Got "+req.getMethod+" request for "+req.getUri)
     requestInterceptor.handle(req) match {
@@ -110,10 +119,10 @@ class IncomingRequestHandler(
   private def sendProxy(host: String, port: Int, req: HttpRequest): Unit = {
     val out = outgoingChannel
     if (out == null) {
-      log("Outgoing host initialized as "+host)
+      log("Outgoing host initialized as "+host+" on "+port)
       createOutgoingChannel(host, port, req)
     } else if (host != lastHost) {
-      log("Outgoing host changed to "+host)
+      log("Outgoing host changed to "+host+" on "+port)
       out.close.addListener((future: ChannelFuture) => {
         outgoingChannel = null
         createOutgoingChannel(host, port, req)
@@ -135,7 +144,7 @@ class IncomingRequestHandler(
       // Our outgoing prSxy is an SSL client--we'll setup our SSL server on in proxyConnectionComplete
       val clientEngine = FakeSsl.clientContext.createSSLEngine
       clientEngine.setUseClientMode(true)
-      outgoingPipeline.addLast("ssl", new SslHandler(clientEngine))
+      // outgoingPipeline.addLast("ssl", new SslHandler(clientEngine))
     }
 
     lastHost = host
@@ -173,11 +182,12 @@ class IncomingRequestHandler(
 
   /** After receiving a CONNECT request, responds with HTTP 200 and then installs an SSLHandler for the host. */
   private def setupIncomingForSsl(host: String): Unit = {
-    val serverEngine = FakeSsl.createServerContextForHost(host).createSSLEngine
-    serverEngine.setUseClientMode(false)
-    val buffer = ChannelBuffers.wrappedBuffer("HTTP/1.0 200 Connection established\r\n\r\n".getBytes())
+    // val serverEngine = FakeSsl.createServerContextForHost(host).createSSLEngine
+    val buffer = ChannelBuffers.wrappedBuffer("HTTP/1.1 200 Connection established\r\n\r\n".getBytes())
     sendDownstream(incomingChannel, buffer, (future: ChannelFuture) => {
-      incomingChannel.getPipeline.addFirst("ssl", new SslHandler(serverEngine))
+      incomingChannel.getPipeline.remove("decoder")
+      incomingChannel.getPipeline.remove("aggregator")
+      // incomingChannel.getPipeline.addFirst("ssl", new SslHandler(serverEngine))
     })
   }
 }
