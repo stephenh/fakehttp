@@ -3,6 +3,7 @@ package fakehttp.interceptor
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 
+/** Keeps hit stats if using {@link LocalhostInterceptor}. */
 object Traffic {
   private val map = new ConcurrentHashMap[String, AtomicInteger]()
 

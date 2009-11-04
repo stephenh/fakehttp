@@ -9,6 +9,11 @@ import org.jboss.netty.bootstrap.ServerBootstrap
 import fakehttp.interceptor._
 import fakehttp.ssl._
 
+/**
+ * Configures and starts netty running the fakehttp proxy.
+ *
+ * Also handles cleanly shutdowning any existing connections.
+ */
 object Proxy {
   def main(args: Array[String]): Unit = {
     val port = args(0).toInt
@@ -16,8 +21,7 @@ object Proxy {
     val interceptor = new NoopInterceptor()
     val sslMode = new OpaqueSslMode() // ClearSslMode()
 
-    // Our incoming channel will need to create outgoing traffic, so pass
-    // the outgoing factory along
+    // The IncomingRequestHandler will create outgoing traffic, so pass along the outgoingChannelFactory
     val outgoingChannelFactory = new NioClientSocketChannelFactory(pool, pool)
     val incomingPipelineFactory = new IncomingPipelineFactory(interceptor, sslMode, outgoingChannelFactory)
 

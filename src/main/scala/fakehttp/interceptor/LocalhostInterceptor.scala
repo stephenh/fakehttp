@@ -3,6 +3,7 @@ package fakehttp.interceptor
 import org.jboss.netty.buffer._
 import org.jboss.netty.handler.codec.http._
 
+/** Proxies all browser traffic back to localhost. */
 class LocalhostInterceptor extends Interceptor {
   def intercept(req: HttpRequest): InterceptResult = {
     return parseHostAndPort(req) match {

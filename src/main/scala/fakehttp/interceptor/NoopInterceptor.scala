@@ -2,6 +2,7 @@ package fakehttp.interceptor
 
 import org.jboss.netty.handler.codec.http._
 
+/** Passes all proxy traffic along untouched. */
 class NoopInterceptor extends Interceptor {
   def intercept(req: HttpRequest): InterceptResult = {
     val p = parseHostAndPort(req)
