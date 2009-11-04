@@ -26,8 +26,8 @@ License
 
 fakehttp is Apache licensed, except for the CyberVillain stuff that drives [ClearSslMode][4], which is [ASL licensed to Selenium][5] and I include here mostly as a proof of concept/cool hack.
 
-[1]: master/src/main/scala/fakehttp/interceptor/Interceptor.scala
-[2]: master/src/main/scala/fakehttp/interceptor/LocalhostInterceptor.scala
-[3]: master/src/main/scala/fakehttp/ssl/OpaqueSslMode.scala
-[4]: master/src/main/scala/fakehttp/ssl/ClearSslMode.scala
+[1]: /stephenh/fakehttp/blob/master/src/main/scala/fakehttp/interceptor/Interceptor.scala
+[2]: /stephenh/fakehttp/blob/master/src/main/scala/fakehttp/interceptor/LocalhostInterceptor.scala
+[3]: /stephenh/fakehttp/blob/master/src/main/scala/fakehttp/ssl/OpaqueSslMode.scala
+[4]: /stephenh/fakehttp/blob/master/src/main/scala/fakehttp/ssl/ClearSslMode.scala
 [5]: http://code.google.com/p/selenium/source/browse/selenium-rc/trunk/server-coreless/src/main/java/cybervillains/ca/CertificateCreator.java
