@@ -1,1 +1,1 @@
-Main-Class: fakehttp.ProxyMain
+Main-Class: fakehttp.Proxy
