@@ -37,7 +37,7 @@ class IncomingRequestHandler(
   }
 
   override def messageReceived(cxt: ChannelHandlerContext, e: MessageEvent): Unit = {
-    if (forwardRawMessage(e.getMessage)) {
+    if (forwardRawChannelBufferOrHttpChunk(e.getMessage)) {
       log("Got "+e.getMessage+" for "+lastHost)
       sendDownstream(outgoingChannel, e.getMessage)
       return
@@ -166,7 +166,7 @@ class IncomingRequestHandler(
   }
 
   /** @return whether we should skip introspecting the message and just forward it */
-  private def forwardRawMessage(message: Object): Boolean = {
+  private def forwardRawChannelBufferOrHttpChunk(message: Object): Boolean = {
     // If ChannelBuffer, our HttpMessageDecoder was removed by OpaqueSslMode
     // If HttpChunk, forward onto the existing connection
     return message.isInstanceOf[ChannelBuffer] || message.isInstanceOf[HttpChunk]
