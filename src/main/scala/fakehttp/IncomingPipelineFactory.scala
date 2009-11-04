@@ -10,6 +10,15 @@ import org.jboss.netty.channel.socket.ClientSocketChannelFactory
 import fakehttp.ssl.SslMode
 import fakehttp.interceptor.Interceptor
 
+/**
+ * Creates a new pipeline for each incoming browser connection.
+ *
+ * We need a separate pipeline per connection because {@link IncomingRequestHandler}
+ * maintains per-connection state.
+ *
+ * Also keeps track of open {@link IncomingRequestHandler}s so that they and their
+ * outgoing channels can be shutdown cleanly.
+ */
 class IncomingPipelineFactory(
   interceptor: Interceptor,
   sslMode: SslMode,

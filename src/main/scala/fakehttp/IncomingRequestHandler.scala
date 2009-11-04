@@ -11,8 +11,13 @@ import fakehttp.interceptor._
 import fakehttp.ssl._
 
 /**
- * Gets an HttpRequest from the browser, sets up a connection to the
- * right server and hooks the two together.
+ * Drives the shuffling of bytes from the incoming connection to the
+ * corresponding destination server.
+ *
+ * When incoming messages are received, this ensures we have an outgoing
+ * connection to the right destination, creates one if we don't, forwards
+ * the request and then passes back the response as well (with the help
+ * of {@link OutgoingResponseHandler}.
  */
 @ChannelPipelineCoverage("one")
 class IncomingRequestHandler(

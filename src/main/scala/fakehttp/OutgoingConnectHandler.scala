@@ -5,6 +5,7 @@ import org.jboss.netty.channel._
 import org.jboss.netty.handler.codec.http._
 import fakehttp.Implicits._
 
+/** Passes channel open/exception/closed events back for the {@link IncomingRequestHandler} to handle. */
 @ChannelPipelineCoverage("one")
 class OutgoingConnectHandler(
   incomingRequestHandler: IncomingRequestHandler,
