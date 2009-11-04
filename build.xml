@@ -27,21 +27,11 @@
     <scalac destdir="bin/main">
       <src>
         <pathelement path="src/main/scala" />
-        <pathelement path="src/main/java" />
       </src>
       <classpath>
         <path refid="build.classpath" />
       </classpath>
     </scalac>
-
-    <javac destdir="bin/main" debug="true" nowarn="yes" source="1.6" target="1.6">
-      <src>
-        <pathelement path="src/main/java" />
-      </src>
-      <classpath>
-        <path refid="build.classpath" />
-      </classpath>
-    </javac>
   </target>
 
   <target name="jar" depends="compile" description="jar bin/main/ into bin/fakehttp.jar">
