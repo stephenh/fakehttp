@@ -14,7 +14,7 @@ object Proxy {
     val port = args(0).toInt
     val pool = Executors.newCachedThreadPool()
     val interceptor = new NoopInterceptor()
-    val sslMode = new ClearSslMode() // OpaqueSslMode()
+    val sslMode = new OpaqueSslMode() // ClearSslMode()
 
     // Our incoming channel will need to create outgoing traffic, so pass
     // the outgoing factory along
