@@ -1,7 +1,8 @@
 package fakehttp.interceptor
 
-import java.util.concurrent._
-import java.util.concurrent.atomic._
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.JavaConversions._
 
 /** Keeps hit stats if using {@link LocalhostInterceptor}. */
 object Traffic {
@@ -13,5 +14,5 @@ object Traffic {
     i.incrementAndGet
   }
 
-  def hits = scala.collection.jcl.Set(map.entrySet)
+  def hits = asSet(map.entrySet)
 }
