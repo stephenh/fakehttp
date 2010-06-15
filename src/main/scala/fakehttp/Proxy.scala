@@ -11,7 +11,7 @@ import fakehttp.ssl._
 
 class Proxy(val interceptor: Interceptor, val port: Int, val sslMode: SslMode) {
   val pool = Executors.newCachedThreadPool
-  
+
   // The IncomingRequestHandler will create outgoing traffic, so pass along the outgoingChannelFactory
   val outgoingChannelFactory = new NioClientSocketChannelFactory(pool, pool)
   val incomingPipelineFactory = new IncomingPipelineFactory(interceptor, sslMode, outgoingChannelFactory)
@@ -26,6 +26,8 @@ class Proxy(val interceptor: Interceptor, val port: Int, val sslMode: SslMode) {
     incomingPipelineFactory.closeRequestHandlers
     pool.shutdown
     pool.awaitTermination(1, TimeUnit.MINUTES)
+    incomingBootstrap.releaseExternalResources
+    outgoingChannelFactory.releaseExternalResources
   }
 }
 
