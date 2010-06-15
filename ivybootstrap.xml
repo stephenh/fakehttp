@@ -4,7 +4,7 @@
 	in the user's $HOME/.ivy2 directory so we can implicitly taskdef them.
 	-->
 
-	<property name="ivy.jar.version" value="2.0.0"/>
+	<property name="ivy.jar.version" value="2.1.0"/>
 	<property name="ivy.jar.name" value="ivy-${ivy.jar.version}.jar"/>
 	<property name="ivy.home" value="${user.home}/.ivy2"/>
 	<available property="ivy.installed" file="${ivy.home}/${ivy.jar.name}"/>
