@@ -39,7 +39,7 @@ class Proxy(val interceptor: Interceptor, val port: Int, val sslMode: SslMode) {
 object Proxy {
   def main(args: Array[String]): Unit = {
     val port = args(0).toInt
-    val interceptor = new NoopInterceptor with HeaderBasedRedirection
+    val interceptor = new NoopInterceptor with HeaderBasedRedirection with HeaderRewriting
     val sslMode = new OpaqueSslMode() // ClearSslMode()
 
     val proxy = new Proxy(interceptor, port, sslMode)
