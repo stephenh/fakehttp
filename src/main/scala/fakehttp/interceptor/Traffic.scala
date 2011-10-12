@@ -14,5 +14,5 @@ object Traffic {
     i.incrementAndGet
   }
 
-  def hits = asSet(map.entrySet)
+  def hits = asScalaSet(map.entrySet)
 }
