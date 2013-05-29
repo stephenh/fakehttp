@@ -1,2 +1,4 @@
-.manager
+.ant-targets-build.xml
+.cache
+*~
 bin
