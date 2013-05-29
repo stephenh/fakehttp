@@ -24,7 +24,7 @@
     </taskdef>
 
     <mkdir dir="bin/main"/>
-    <scalac destdir="bin/main">
+    <scalac destdir="bin/main" deprecation="on">
       <src>
         <pathelement path="src/main/scala" />
       </src>

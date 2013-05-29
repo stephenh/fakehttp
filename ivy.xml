@@ -1,5 +1,5 @@
 <ivy-module version="2.0" xmlns:m="http://ant.apache.org/ivy/maven">
-  <info organisation="bizo" module="fakehttp" revision="1.0"/>
+  <info organisation="bizo.com" module="fakehttp" revision="1.2.rc8"/>
   <configurations>
     <conf name="default"/>
     <conf name="test"/>
