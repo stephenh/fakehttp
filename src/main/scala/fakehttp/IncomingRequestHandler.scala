@@ -9,6 +9,7 @@ import org.jboss.netty.handler.ssl.SslHandler
 import fakehttp.Implicits._
 import fakehttp.interceptor._
 import fakehttp.ssl._
+import java.net.URL
 
 /**
  * Drives the shuffling of bytes from the incoming connection to the
@@ -139,10 +140,26 @@ class IncomingRequestHandler(
       sslMode.setupOutgoingForSsl(this, outgoingPipeline)
     }
 
+    def urlToPath(url: URL) = url.getPath +
+      (if (url.getQuery == null) "" else "?" + url.getQuery) +
+      (if (url.getRef == null) "" else "#" + url.getRef)
+
     outgoingPipeline.addFirst("connector", new OutgoingConnectHandler(this, new InetSocketAddress(host, port), initialBrowserRequest))
     // Put this back if you want to translate the response
     // outgoingPipeline.addLast("decoder", new HttpResponseDecoder())
-    outgoingPipeline.addLast("encoder", new HttpRequestEncoder())
+    outgoingPipeline.addLast("encoder", new HttpRequestEncoder() {
+      // Override encodeInitialLine so we output only the /path instead of the full uri
+      override def encodeInitialLine(buf: ChannelBuffer, message: HttpMessage) {
+        val request = message.asInstanceOf[HttpRequest]
+        buf.writeBytes(request.getMethod.toString.getBytes("ASCII"));
+        buf.writeBytes(" ".getBytes("ASCII"));
+        buf.writeBytes(urlToPath(new URL(request.getUri)).getBytes("ASCII"));
+        buf.writeBytes(" ".getBytes("ASCII"));
+        buf.writeBytes(request.getProtocolVersion.toString.getBytes("ASCII"));
+        buf.writeBytes("\r\n".getBytes("ASCII"));
+      }
+    })
+
     outgoingPipeline.addLast("outgoingResponse", new OutgoingResponseHandler(this))
     outgoingChannelFactory.newChannel(outgoingPipeline)
   }

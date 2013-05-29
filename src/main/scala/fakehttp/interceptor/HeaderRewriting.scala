@@ -17,15 +17,12 @@ trait HeaderRewriting extends Interceptor {
   import scala.collection.JavaConversions._
   
   override abstract def intercept(request: HttpRequest): InterceptResult = {
-    request.getHeaderNames filter { 
-      _.startsWith(PREFIX) 
-    } foreach { header =>
+    request.getHeaderNames filter { _.startsWith(PREFIX) } foreach { header =>
       val value = request.getHeader(header)
       request.setHeader(header.substring(PREFIX_LENGTH), value)
       System.err.println("Setting header [%s] to [%s]".format(header.substring(PREFIX_LENGTH), value))
       request.removeHeader(header)
     }
-    
     super.intercept(request)
   }
   

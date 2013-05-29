@@ -24,7 +24,7 @@ trait HeaderBasedRedirection extends Interceptor {
     val (defaultHost, defaultPort) = super.parseHostAndPort(request)
     log("Default: (host: %s) (port: %d)".format(defaultHost, defaultPort))
     val applicableHost = Option(request.getHeader(applicableHostHeader)).flatMap { str => hostRegex.findFirstIn(str) }
-    log("Applicable: (host: %s)".format(applicableHost))
+    log("Applicable: (host: %s)".format(applicableHost.getOrElse("None")))
 
     val (host, port) = applicableHost match {
       case Some(applicableHost) if applicableHost != defaultHost =>
